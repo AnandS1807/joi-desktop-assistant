@@ -1,144 +1,89 @@
-#!/usr/bin/env python3
-"""
-Independent test for Speech-to-Text functionality
-Records audio from microphone and transcribes it
-"""
-import sys
+import whisper
 import os
+import numpy as np
+from datetime import datetime
+from src.config.settings import WHISPER_MODEL
 
-# Add src to path
-sys.path.insert(0, os.path.dirname(__file__))
-
-
-import pyaudio
-import wave
-import time
-
-def record_test_audio(duration=5, filename="test_audio.wav"):
-    """Record audio for testing"""
-    print("\n🎤 Recording audio for 5 seconds... Speak now!")
-    print("💡 Tip: Speak clearly into your microphone\n")
-    
-    CHUNK = 1024
-    FORMAT = pyaudio.paInt16
-    CHANNELS = 1
-    RATE = 16000
-    
-    p = pyaudio.PyAudio()
-    
-    try:
-        stream = p.open(format=FORMAT,
-                        channels=CHANNELS,
-                        rate=RATE,
-                        input=True,
-                        frames_per_buffer=CHUNK)
-        
-        frames = []
-        
-        for i in range(0, int(RATE / CHUNK * duration)):
-            data = stream.read(CHUNK)
-            frames.append(data)
-            # Show recording progress
-            if i % 10 == 0:
-                print(f"⏺️  Recording... {int(i/10)}/5 seconds")
-        
-        print("⏺️  Recording... 5/5 seconds")
-        
-        stream.stop_stream()
-        stream.close()
-        
-    except Exception as e:
-        print(f"❌ Error during recording: {e}")
-        return None
-    finally:
-        p.terminate()
-    
-    # Save the recorded data
-    try:
-        wf = wave.open(filename, 'wb')
-        wf.setnchannels(CHANNELS)
-        wf.setsampwidth(p.get_sample_size(FORMAT))
-        wf.setframerate(RATE)
-        wf.writeframes(b''.join(frames))
-        wf.close()
-        
-        print(f"\n✅ Audio saved as {filename}")
-        return filename
-    except Exception as e:
-        print(f"❌ Error saving audio: {e}")
-        return None
-
-def test_speech_to_text():
-    """Test the speech to text functionality"""
-    print("=" * 60)
-    print("🧪 SPEECH-TO-TEXT TEST")
-    print("=" * 60)
-    
-    # Initialize the speech-to-text engine
-    print("\n📦 Initializing Whisper model...")
-    stt = SpeechToText()
-    
-    # Record new audio
-    print("\n" + "=" * 60)
-    print("STEP 1: Recording Audio")
-    print("=" * 60)
-    audio_file = record_test_audio(duration=5)
-    
-    if audio_file is None:
-        print("❌ Recording failed. Exiting...")
-        return
-    
-    # Test transcription
-    print("\n" + "=" * 60)
-    print("STEP 2: Transcribing Audio")
-    print("=" * 60)
-    print("🔄 Processing audio with Whisper AI...")
-    
-    result = stt.transcribe_audio(audio_file)
-    
-    print("\n" + "=" * 60)
-    print("📝 TRANSCRIPTION RESULTS")
-    print("=" * 60)
-    
-    if result['text']:
-        print(f"\n✅ Transcribed Text:\n   \"{result['text']}\"")
-        print(f"\n📊 Confidence: {result['confidence']}")
-        print(f"🌍 Language: {result.get('language', 'N/A')}")
-    else:
-        print(f"\n❌ No text transcribed")
-        if 'error' in result:
-            print(f"   Error: {result['error']}")
-    
-    # Test with non-existent file (error handling)
-    print("\n" + "=" * 60)
-    print("STEP 3: Testing Error Handling")
-    print("=" * 60)
-    print("🧪 Testing with non-existent file...")
-    result = stt.transcribe_audio("non_existent_file.wav")
-    
-    if 'error' in result:
-        print(f"✅ Error handling works correctly: {result['error']}")
-    else:
-        print(f"Result: {result}")
-    
-    print("\n" + "=" * 60)
-    print("✅ TEST COMPLETE")
-    print("=" * 60)
-    
-    # Cleanup
-    if os.path.exists(audio_file):
+class SpeechToText:
+    def __init__(self):
+        print("🔄 Loading Whisper model...")
         try:
-            os.remove(audio_file)
-            print(f"\n🧹 Cleaned up temporary file: {audio_file}")
-        except:
-            pass
+            self.model = whisper.load_model(WHISPER_MODEL)
+            print("✅ Whisper model loaded!")
+        except Exception as e:
+            print(f"❌ Failed to load Whisper model: {e}")
+            self.model = None
 
-if __name__ == "__main__":
-    try:
-        test_speech_to_text()
-    except KeyboardInterrupt:
-        print("\n\n⚠️  Test interrupted by user")
-    except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
+    def _load_audio_without_ffmpeg(self, filename):
+        """Load audio directly from WAV file without FFmpeg"""
+        try:
+            import wave
+            with wave.open(filename, 'rb') as wf:
+                # Read audio data
+                audio_data = wf.readframes(wf.getnframes())
+                
+                # Convert to numpy array
+                audio = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+                
+                # Resample if needed (Whisper expects 16kHz)
+                sample_rate = wf.getframerate()
+                if sample_rate != 16000:
+                    try:
+                        from scipy import signal
+                        num_samples = int(len(audio) * 16000 / sample_rate)
+                        audio = signal.resample(audio, num_samples)
+                    except ImportError:
+                        # Fallback: simple resampling
+                        ratio = 16000 / sample_rate
+                        new_length = int(len(audio) * ratio)
+                        audio = np.interp(
+                            np.linspace(0, len(audio)-1, new_length),
+                            np.arange(len(audio)),
+                            audio
+                        )
+                
+                return audio
+        except Exception as e:
+            print(f"Audio loading error: {e}")
+            return None
+
+    def _cleanup_audio_file(self, audio_path):
+        """Remove audio file after processing"""
+        try:
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+                print(f"🗑️ Cleaned up audio file: {os.path.basename(audio_path)}")
+        except Exception as e:
+            print(f"Cleanup error: {e}")
+
+    def transcribe_audio(self, audio_path, cleanup=True):
+        """Transcribe audio file to text and optionally clean up"""
+        try:
+            if not os.path.exists(audio_path) or self.model is None:
+                return {"text": "", "confidence": 0.0}
+
+            # Load audio without FFmpeg
+            audio = self._load_audio_without_ffmpeg(audio_path)
+            if audio is None:
+                return {"text": "", "confidence": 0.0}
+
+            # Transcribe
+            result = self.model.transcribe(audio)
+            text = result["text"].strip()
+            
+            # Clean up audio file if requested
+            if cleanup:
+                self._cleanup_audio_file(audio_path)
+
+            return {
+                "text": text,
+                "confidence": 0.8 if text else 0.0,
+                "timestamp": datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            print(f"Transcription error: {e}")
+            # Still try to clean up on error
+            if cleanup:
+                self._cleanup_audio_file(audio_path)
+            return {"text": "", "confidence": 0.0}
