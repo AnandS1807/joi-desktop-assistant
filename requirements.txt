@@ -1,0 +1,18 @@
+# Core dependencies
+torch>=2.0.0
+torchaudio>=2.0.0
+opencv-python>=4.8.0
+pyautogui>=0.9.54
+pyaudio>=0.2.11
+whisper-openai>=20231117
+transformers>=4.35.0
+pynput>=1.7.6
+numpy>=1.24.0
+pillow>=10.0.0
+pygetwindow>=0.0.9
+pyperclip>=1.8.2
+psutil>=5.9.0
+
+# Optional for enhanced functionality
+chromadb>=0.4.15
+ultralytics>=8.0.0
