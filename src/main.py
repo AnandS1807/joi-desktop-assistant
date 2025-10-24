@@ -107,20 +107,36 @@ class AIAssistant:
                 print(f"❌ Observation error: {e}")
                 time.sleep(1)
     
+# In the _audio_processing_loop method, replace the transcription part:
     def _audio_processing_loop(self):
-        """Process audio files in background"""
+        """Process audio files in background with context"""
         while self.is_running:
             try:
                 # Check for new audio files
-                if not self.audio_capture.audio_queue.empty():
+                if hasattr(self.audio_capture, 'audio_queue') and not self.audio_capture.audio_queue.empty():
                     audio_path = self.audio_capture.audio_queue.get()
                     
-                    # Transcribe audio
-                    transcript = self.speech_to_text.transcribe_audio(audio_path)
+                    # Get conversation context
+                    conversation_context = self.audio_capture.get_conversation_context()
                     
-                    if transcript["text"]:
+                    # Transcribe with context
+                    transcript = self.speech_to_text.transcribe_audio(
+                        audio_path, 
+                        cleanup=True, 
+                        conversation_context=conversation_context
+                    )
+                    
+                    if transcript["text"] and len(transcript["text"].strip()) > 2:
+                        # Update conversation context
+                        self.audio_capture.update_conversation_context(transcript["text"])
                         self.recent_audio.append(transcript)
-                        print(f"🎤 Voice: {transcript['text']}")
+                        print(f"🎤 Voice: '{transcript['text']}'")
+                        
+                        # Show context if available
+                        if transcript.get('has_context'):
+                            context = self.audio_capture.get_conversation_context()
+                            if len(context) > 1:
+                                print(f"   📝 Context: {len(context)} previous utterances")
                         
                         # Keep only recent audio
                         if len(self.recent_audio) > 5:

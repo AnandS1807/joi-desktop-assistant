@@ -13,6 +13,8 @@ class AudioCapture:
         self.audio_queue = queue.Queue()
         self.is_recording = False
         self.audio = pyaudio.PyAudio()
+        self.conversation_context = []  # Store recent transcripts for context
+        self.max_context_length = 5     # Keep last 5 transcripts
         
     def start_recording(self):
         """Start audio recording in separate thread"""
@@ -26,7 +28,7 @@ class AudioCapture:
         self.is_recording = False
         
     def _record_audio(self):
-        """Continuous audio recording"""
+        """Continuous audio recording with longer chunks"""
         try:
             stream = self.audio.open(
                 format=pyaudio.paInt16,
@@ -38,7 +40,7 @@ class AudioCapture:
             
             frames = []
             chunk_count = 0
-            max_chunks = (AUDIO_RATE // AUDIO_CHUNK) * 5  # 5 seconds
+            max_chunks = (AUDIO_RATE // AUDIO_CHUNK) * 10  # INCREASED to 10 seconds
             
             while self.is_recording:
                 try:
@@ -46,7 +48,7 @@ class AudioCapture:
                     frames.append(data)
                     chunk_count += 1
                     
-                    # Save every 5 seconds
+                    # Save every 10 seconds (DOUBLE the duration)
                     if chunk_count >= max_chunks:
                         self._save_audio_chunk(frames)
                         frames = []
@@ -78,7 +80,7 @@ class AudioCapture:
             
             # Add to processing queue
             self.audio_queue.put(str(filepath))
-            print(f"🎤 Audio chunk saved: {filename}")
+            print(f"🎤 Audio chunk saved (10s): {filename}")
             
         except Exception as e:
             print(f"Audio save error: {e}")
@@ -92,3 +94,18 @@ class AudioCapture:
             except queue.Empty:
                 break
         return audio_files
+    
+    def update_conversation_context(self, transcript):
+        """Update conversation context with new transcript"""
+        if transcript and transcript.strip():
+            self.conversation_context.append({
+                'text': transcript,
+                'timestamp': datetime.now().isoformat()
+            })
+            # Keep only recent context
+            if len(self.conversation_context) > self.max_context_length:
+                self.conversation_context = self.conversation_context[-self.max_context_length:]
+    
+    def get_conversation_context(self):
+        """Get recent conversation context"""
+        return self.conversation_context.copy()

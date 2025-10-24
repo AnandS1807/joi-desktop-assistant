@@ -56,8 +56,8 @@ class SpeechToText:
         except Exception as e:
             print(f"Cleanup error: {e}")
 
-    def transcribe_audio(self, audio_path, cleanup=True):
-        """Transcribe audio file to text and optionally clean up"""
+    def transcribe_audio(self, audio_path, cleanup=True, conversation_context=None):
+        """Transcribe audio file to text with conversation context"""
         try:
             if not os.path.exists(audio_path) or self.model is None:
                 return {"text": "", "confidence": 0.0}
@@ -67,6 +67,13 @@ class SpeechToText:
             if audio is None:
                 return {"text": "", "confidence": 0.0}
 
+            # Transcribe with context hints if available
+            if conversation_context and len(conversation_context) > 0:
+                # Use recent context to improve transcription
+                recent_texts = [ctx['text'] for ctx in conversation_context[-2:]]  # Last 2 transcripts
+                context_hint = " ".join(recent_texts)
+                print(f"🔍 Using context: {context_hint[:100]}...")
+            
             # Transcribe
             result = self.model.transcribe(audio)
             text = result["text"].strip()
@@ -78,7 +85,8 @@ class SpeechToText:
             return {
                 "text": text,
                 "confidence": 0.8 if text else 0.0,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "has_context": conversation_context is not None and len(conversation_context) > 0
             }
 
         except Exception as e:

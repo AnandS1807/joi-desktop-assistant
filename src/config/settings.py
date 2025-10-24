@@ -22,7 +22,7 @@ AUDIO_CHUNK = 1024
 AUDIO_CHANNELS = 1
 AUDIO_FORMAT = 'pyaudio.paInt16'
 AUDIO_RATE = 16000
-AUDIO_RECORD_SECONDS = 5
+AUDIO_RECORD_SECONDS = 10
 
 # Model settings
 WHISPER_MODEL = "base"  # "tiny", "base", "small", "medium", "large"
