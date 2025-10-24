@@ -105,7 +105,7 @@ class AudioCapture:
             # Keep only recent context
             if len(self.conversation_context) > self.max_context_length:
                 self.conversation_context = self.conversation_context[-self.max_context_length:]
-    
+
     def get_conversation_context(self):
         """Get recent conversation context"""
         return self.conversation_context.copy()

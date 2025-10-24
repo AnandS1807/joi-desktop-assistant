@@ -4,12 +4,14 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from src.observation.audio_capture import AudioCapture
 from src.observation.screen_capture import ScreenCapture
+from src.observation.audio_capture import AudioCapture
 from src.observation.input_tracker import InputTracker
 from src.processing.speech_to_text import SpeechToText
 from src.processing.behavior_analyzer import BehaviorAnalyzer
 from src.data.storage_manager import StorageManager
+from src.automation.workflow_executor import WorkflowExecutor
+from src.automation.workflow_manager import WorkflowManager
 from src.config.settings import CAPTURE_INTERVAL
 
 class AIAssistant:
@@ -23,9 +25,12 @@ class AIAssistant:
         self.speech_to_text = SpeechToText()
         self.behavior_analyzer = BehaviorAnalyzer()
         self.storage_manager = StorageManager()
+        self.workflow_executor = WorkflowExecutor()
+        self.workflow_manager = WorkflowManager()
         
         self.is_running = False
         self.observation_thread = None
+        self.automation_enabled = False
         
         # Data buffers
         self.recent_audio = []
@@ -57,6 +62,7 @@ class AIAssistant:
         print("🔍 AI Assistant is now observing your desktop...")
         print("💡 Say commands like 'open Excel' or 'save file'")
         print("⏹️  Press Ctrl+C to stop")
+        print("🤖 Use 'enable_automation()' to start auto-executing workflows")
     
     def stop(self):
         """Stop the AI assistant"""
@@ -69,12 +75,27 @@ class AIAssistant:
         
         # Wait for threads to finish
         if self.observation_thread:
-            self.observation_thread.join()
+            self.observation_thread.join(timeout=2)
         if self.audio_processing_thread:
-            self.audio_processing_thread.join()
+            self.audio_processing_thread.join(timeout=2)
         
         print("✅ AI Assistant stopped!")
     
+    def enable_automation(self):
+        """Enable workflow automation with confirmation"""
+        print("🚨 AUTOMATION WARNING: The AI will now automatically execute workflows!")
+        print("💡 Make sure no important work is unsaved!")
+        print("⏳ Enabling automation in 5 seconds...")
+        time.sleep(5)
+        
+        self.automation_enabled = True
+        print("🤖 AUTOMATION ENABLED - I will now execute detected workflows!")
+
+    def disable_automation(self):
+        """Disable workflow automation"""
+        self.automation_enabled = False
+        print("⏸️ AUTOMATION DISABLED")
+
     def _observation_loop(self):
         """Main observation loop"""
         while self.is_running:
@@ -100,14 +121,39 @@ class AIAssistant:
                     
                     # Display insights
                     self._display_insights(analysis)
+                    
+                    # Check and execute automation
+                    self._check_and_execute_automation(analysis)
                 
                 time.sleep(CAPTURE_INTERVAL)
                 
             except Exception as e:
                 print(f"❌ Observation error: {e}")
                 time.sleep(1)
+
+    def _check_and_execute_automation(self, analysis):
+        """Check if we should execute automation for this workflow"""
+        if not self.automation_enabled:
+            return
+        
+        automation_suggestion = analysis.get('automation_suggestion')
+        if automation_suggestion and automation_suggestion.get('confidence', 0) > 0.8:
+            workflow_name = automation_suggestion['workflow_name']
+            
+            print(f"🚀 AUTO-EXECUTING: {workflow_name}")
+            
+            # Save the workflow
+            self.workflow_manager.save_workflow(automation_suggestion)
+            
+            # Execute the workflow
+            success = self.workflow_executor.execute_workflow(automation_suggestion)
+            
+            if success:
+                print(f"✅ Successfully executed: {workflow_name}")
+                self.workflow_manager.increment_execution_count(workflow_name)
+            else:
+                print(f"❌ Failed to execute: {workflow_name}")
     
-# In the _audio_processing_loop method, replace the transcription part:
     def _audio_processing_loop(self):
         """Process audio files in background with context"""
         while self.is_running:

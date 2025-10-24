@@ -5,4 +5,4 @@ test_input_tracker.py
 test_integrated_system.py
 test_screen_capture.py
 test_enhanced_analyzer.py
-
+test_automation.py
