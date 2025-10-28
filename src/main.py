@@ -209,7 +209,44 @@ class AIAssistant:
             if analysis["automation_suggestion"]:
                 suggestion = analysis["automation_suggestion"]
                 print(f"💡 Suggestion: {suggestion['workflow_name']}")
+                
+    def start_with_gui(self):
+        """Start the assistant with GUI"""
+        try:
+            from src.gui.dashboard import AssistantDashboard
+            print("🎨 Launching GUI...")
+            self.gui = AssistantDashboard(self)
+            
+            # Start the assistant in a separate thread to avoid blocking GUI
+            import threading
+            def start_assistant():
+                print("🤖 Starting AI Assistant from GUI...")
+                self.start()
+            
+            assistant_thread = threading.Thread(target=start_assistant, daemon=True)
+            assistant_thread.start()
+            
+            # Run the GUI (this will block until GUI closes)
+            self.gui.run()
+            
+        except ImportError as e:
+            print(f"❌ GUI import error: {e}")
+            print("💡 Falling back to console mode...")
+            self.start_interactive()
+        except Exception as e:
+            print(f"❌ GUI error: {e}")
+            print("💡 Falling back to console mode...")
+            self.start_interactive()
 
+    def start_interactive(self):
+        """Start in interactive console mode as fallback"""
+        self.start()
+        import time
+        try:
+            while self.is_running:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            self.stop()
 def main():
     assistant = AIAssistant()
     
